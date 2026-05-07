@@ -182,14 +182,12 @@ class TestScene: Scene
         
         aLevel = addGLTFAsset("assets/ruins/ruins.gltf");
         
-        aDemon = addGLTFAsset("assets/baal/gltf/baal_animated.gltf");
+        aDemon = addGLTFAsset("assets/baal/baal_animated.gltf");
         
         aWeapon = addGLTFAsset("assets/weapon/incinerator.gltf");
         
         music = audio.streamMusic("assets/music/ruins_of_hell.mp3");
-        
         ambient = audio.streamMusic("assets/sounds/ambient.mp3");
-        
         footsteps[0] = audio.loadSound("assets/sounds/footstep_ground1.wav");
         footsteps[1] = audio.loadSound("assets/sounds/footstep_ground2.wav");
         demonFootsteps[0] = audio.loadSound("assets/sounds/heavy_footstep1.wav");

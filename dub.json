@@ -1,0 +1,29 @@
+{
+    "name": "ruins-of-hell",
+    "description": "Playable demo for Dagon Engine",
+    "homepage": "https://github.com/gecko0307/ruins-of-hell",
+    "license": "BSL-1.0",
+    "authors": [
+        "Timur Gafarov"
+    ],
+    
+    "dependencies": {
+        "dagon": "~>1.0.0",
+        "dagon:jolt": "~>1.0.0",
+        "dagon:audio": "~>1.0.0"
+    },
+    
+    "buildRequirements": [
+        "allowWarnings"
+    ],
+    
+    "lflags-linux": ["-rpath=$$ORIGIN"],
+    
+    "configurations": [
+        {
+            "name": "application",
+            "targetType": "executable",
+            "targetName": "RoH"
+        }
+    ]
+}

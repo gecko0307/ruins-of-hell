@@ -176,13 +176,13 @@ class TestScene: Scene
         aCrosshair = addTextureAsset("assets/textures/crosshair.png");
         aMoon = addTextureAsset("assets/textures/moon.png");
         aTexFireDiffuse = addTextureAsset("assets/textures/fire.png");
-        aTexSmokeDiffuse = addTextureAsset("assets/textures/smoke-diffuse.png");
+        aTexSmokeDiffuse = addTextureAsset("assets/textures/smoke.png");
         aTexSpark = addTextureAsset("assets/textures/spark.png");
         aTexBlood = addTextureAsset("assets/textures/blood.png");
         
         aLevel = addGLTFAsset("assets/ruins/ruins.gltf");
         
-        aDemon = addGLTFAsset("assets/baal/baal_animated.gltf");
+        aDemon = addGLTFAsset("assets/baal/baal.gltf");
         
         aWeapon = addGLTFAsset("assets/weapon/incinerator.gltf");
         

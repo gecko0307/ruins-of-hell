@@ -12,6 +12,11 @@ class PlanetShader: Shader
     ShaderParameter!Matrix4x4f viewMatrix;
     ShaderParameter!Matrix4x4f invViewMatrix;
     ShaderParameter!Matrix4x4f prevModelViewMatrix;
+    ShaderParameter!int diffuseTexture;
+    ShaderParameter!Color4f diffuseVector;
+    ShaderSubroutine diffuseSurbroutine;
+    GLuint diffuseSurbroutineColorTexture,
+           diffuseSurbroutineColorValue;
 
    public:
     this(Owner owner)
@@ -27,6 +32,11 @@ class PlanetShader: Shader
         viewMatrix = createParameter!Matrix4x4f("viewMatrix");
         invViewMatrix = createParameter!Matrix4x4f("invViewMatrix");
         prevModelViewMatrix = createParameter!Matrix4x4f("prevModelViewMatrix");
+        diffuseTexture = createParameter!int("diffuseTexture");
+        diffuseVector = createParameter!Color4f("diffuseVector");
+        diffuseSurbroutine = createParameterSubroutine("diffuse", ShaderType.Fragment);
+        diffuseSurbroutineColorTexture = diffuseSurbroutine.getIndex("diffuseColorTexture");
+        diffuseSurbroutineColorValue = diffuseSurbroutine.getIndex("diffuseColorValue");
     }
 
     ~this()
@@ -48,17 +58,17 @@ class PlanetShader: Shader
         
         // Diffuse
         glActiveTexture(GL_TEXTURE0);
-        setParameter("diffuseTexture", cast(int)0);
-        setParameter("diffuseVector", mat.baseColorFactor);
+        diffuseTexture = 0;
+        diffuseVector = mat.baseColorFactor;
         if (mat.baseColorTexture)
         {
             mat.baseColorTexture.bind();
-            setParameterSubroutine("diffuse", ShaderType.Fragment, "diffuseColorTexture");
+            diffuseSurbroutine.index = diffuseSurbroutineColorTexture;
         }
         else
         {
             glBindTexture(GL_TEXTURE_2D, 0);
-            setParameterSubroutine("diffuse", ShaderType.Fragment, "diffuseColorValue");
+            diffuseSurbroutine.index = diffuseSurbroutineColorValue;
         }
         
         super.bindParameters(state);

@@ -8,9 +8,9 @@
     ],
     
     "dependencies": {
-        "dagon": "~>1.0.0",
-        "dagon:jolt": "~>1.0.0",
-        "dagon:audio": "~>1.0.0"
+        "dagon": "~>1.0.1",
+        "dagon:jolt": "~>1.0.1",
+        "dagon:audio": "~>1.0.1"
     },
     
     "buildRequirements": [

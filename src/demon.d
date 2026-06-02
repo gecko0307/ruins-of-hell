@@ -50,7 +50,7 @@ class Demon: EventListener
     
     Steering steering;
     
-    CharacterPartCollider[7] hitboxes;
+    CharacterHitbox[7] hitboxes;
     
     bool canGrowl = true;
     float growlTimer = 0.0f;

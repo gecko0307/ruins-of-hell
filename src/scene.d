@@ -56,6 +56,7 @@ class GameScene: Scene
     Wav fire;
     Wav shot;
     Wav reload;
+    Wav uiPause;
     
     float musicStartTimer = 0.0f;
     bool musicStarted = false;
@@ -125,6 +126,8 @@ class GameScene: Scene
     Entity eCrosshair;
     TextureAsset aCrosshair;
     
+    TextureAsset aUISpritesheet;
+    
     Entity eParticlesDebris;
     Emitter emitterDebris;
     float shootDebrisTimer = 0.0f;
@@ -132,6 +135,20 @@ class GameScene: Scene
     Entity eAltarVortex;
     
     UIWidget pauseBackground;
+    UIWidget pauseMenu;
+    UIWidget pauseMenuSkull;
+    UIWidget pauseMenuResume;
+    UIWidget pauseMenuSettings;
+    UIWidget pauseMenuQuit;
+    
+    int pauseMenuWidth = 320;
+    int pauseMenuHeight = 192;
+    
+    uint pauseMenuHover = 0;
+    
+    int ambientVoice;
+    int fireVoice;
+    int musicVoice;
     
     this(MyGame game)
     {
@@ -154,6 +171,7 @@ class GameScene: Scene
         
         aTexMuzzleFlash = addTextureAsset("assets/textures/muzzle_flash.png");
         aCrosshair = addTextureAsset("assets/textures/crosshair.png");
+        aUISpritesheet = addTextureAsset("assets/ui/ui_spritesheet.png");
         aMoon = addTextureAsset("assets/textures/moon.png");
         aTexFireDiffuse = addTextureAsset("assets/textures/fire.png");
         aTexSmokeDiffuse = addTextureAsset("assets/textures/smoke.png");
@@ -174,6 +192,8 @@ class GameScene: Scene
         fire = audio.loadSound("assets/sounds/fire.wav");
         shot = audio.loadSound("assets/sounds/shot.wav");
         reload = audio.loadSound("assets/sounds/reload.wav");
+        
+        uiPause = audio.loadSound("assets/sounds/pause.wav");
     }
     
     override void onLoad(Time t, float progress)
@@ -491,15 +511,68 @@ class GameScene: Scene
         pauseBackground.backgroundFocusedColor = Color4f(0.0f, 0.0f, 0.0f, 0.5f);
         pauseBackground.background.visible = false;
         
+        Vector2f uiSpritesheetSize = Vector2f(1024, 1024);
+        
+        pauseMenu = addWidget!UIWidget();
+        
+        pauseMenuSkull = addWidget!UIWidget(pauseMenu);
+        pauseMenuSkull.x = 0; // responsive
+        pauseMenuSkull.y = 0; // responsive
+        pauseMenuSkull.width = 60;
+        pauseMenuSkull.height = 60;
+        pauseMenuSkull.background.material.baseColorTexture = aUISpritesheet.texture;
+        pauseMenuSkull.background.material.setSprite(
+            Vector2f(128.0f, 128.0f) / uiSpritesheetSize,
+            Vector2f(320.0f, 0.0f) / uiSpritesheetSize);
+        pauseMenuSkull.background.visible = true;
+        
+        pauseMenuResume = addWidget!UIWidget(pauseMenu);
+        pauseMenuResume.x = 0; // responsive
+        pauseMenuResume.y = 0; // responsive
+        pauseMenuResume.width = 320;
+        pauseMenuResume.height = 64;
+        pauseMenuResume.background.material.baseColorTexture = aUISpritesheet.texture;
+        pauseMenuResume.background.material.setSprite(
+            Vector2f(320.0f, 64.0f) / uiSpritesheetSize,
+            Vector2f(0.0f, 0.0f) / uiSpritesheetSize);
+        pauseMenuResume.background.material.opacity = 0.5f;
+        pauseMenuResume.background.visible = true;
+        
+        pauseMenuSettings = addWidget!UIWidget(pauseMenu);
+        pauseMenuSettings.x = 0; // responsive
+        pauseMenuSettings.y = 0; // responsive
+        pauseMenuSettings.width = 320;
+        pauseMenuSettings.height = 64;
+        pauseMenuSettings.background.material.baseColorTexture = aUISpritesheet.texture;
+        pauseMenuSettings.background.material.setSprite(
+            Vector2f(320.0f, 64.0f) / uiSpritesheetSize,
+            Vector2f(0.0f, 64.0f) / uiSpritesheetSize);
+        pauseMenuSettings.background.material.opacity = 0.5f;
+        pauseMenuSettings.background.visible = true;
+        
+        pauseMenuQuit = addWidget!UIWidget(pauseMenu);
+        pauseMenuQuit.x = 0; // responsive
+        pauseMenuQuit.y = 0; // responsive
+        pauseMenuQuit.width = 320;
+        pauseMenuQuit.height = 64;
+        pauseMenuQuit.background.material.baseColorTexture = aUISpritesheet.texture;
+        pauseMenuQuit.background.material.setSprite(
+            Vector2f(320.0f, 64.0f) / uiSpritesheetSize,
+            Vector2f(0.0f, 128.0f) / uiSpritesheetSize);
+        pauseMenuQuit.background.material.opacity = 0.5f;
+        pauseMenuQuit.background.visible = true;
+        
+        pauseMenu.entity.hide();
+        
         // Demon
         demon = New!Demon(this, aDemon, assetManager);
         
         //
         eventManager.showCursor(false);
         
-        audio.playMusic(ambient, true);
+        ambientVoice = audio.playMusic(ambient, true);
         
-        auto fireVoice = audio.playMusicAtPosition(fire, eParticlesFire.position, true);
+        fireVoice = audio.playMusicAtPosition(fire, eParticlesFire.position, true);
         audio.setAttenuation(fireVoice, AttenuationModel.ExponentialDistance, 0.2f);
     }
     
@@ -531,6 +604,17 @@ class GameScene: Scene
                 muzzleFlashSprite.rotation = uniform(0.0f, 1.0f) * 360.0f;
                 eMuzzleFlash.opacity = 1.0f;
                 shootRaycast = true;
+            }
+        }
+        else
+        {
+            if (pauseMenuHover == 1)
+            {
+                togglePause();
+            }
+            else if (pauseMenuHover == 3)
+            {
+                game.exit();
             }
         }
     }
@@ -587,7 +671,7 @@ class GameScene: Scene
             musicStartTimer += t.delta;
             if (musicStartTimer > 10.0f)
             {
-                audio.playMusic(music, true);
+                musicVoice = audio.playMusic(music, true);
                 musicStarted = true;
             }
         }
@@ -887,6 +971,8 @@ class GameScene: Scene
             paused = true;
             
             pauseBackground.background.visible = true;
+            onPauseUpdate(Time(0.0, 0.0));
+            pauseMenu.entity.show();
             
             game.postProcessingRenderer.depthOfFieldEnabled = true;
             game.postProcessingRenderer.dofManual = true;
@@ -894,6 +980,12 @@ class GameScene: Scene
             game.postProcessingRenderer.dofNearDistance = 0.0;
             game.postProcessingRenderer.dofFarStart = 0.0;
             game.postProcessingRenderer.dofFarDistance = 0.0;
+            
+            audio.pause(ambientVoice);
+            audio.pause(fireVoice);
+            audio.pause(musicVoice);
+            
+            audio.play(uiPause);
         }
         else
         {
@@ -902,6 +994,78 @@ class GameScene: Scene
             paused = false;
             pauseBackground.background.visible = false;
             game.postProcessingRenderer.dofManual = false;
+            pauseMenu.entity.hide();
+            
+            audio.resume(ambientVoice);
+            audio.resume(fireVoice);
+            audio.resume(musicVoice);
+            
+            audio.play(uiPause);
+        }
+    }
+    
+    override void onPauseUpdate(Time t)
+    {
+        // Update pause menu state
+        
+        int menuX = cast(int)(game.drawableWidth / 2 - pauseMenuWidth * 0.5f);
+        int menuY = cast(int)(game.drawableHeight / 2 - pauseMenuHeight * 0.5f);
+        
+        pauseMenuResume.x = menuX;
+        pauseMenuResume.y = menuY;
+        pauseMenuSettings.x = menuX;
+        pauseMenuSettings.y = menuY + pauseMenuSettings.height;
+        pauseMenuQuit.x = menuX;
+        pauseMenuQuit.y = menuY + pauseMenuSettings.height * 2;
+        
+        if (eventManager.mouseX >= menuX && eventManager.mouseX < (menuX + pauseMenuWidth) &&
+            eventManager.mouseY >= menuY && eventManager.mouseY < (menuY + pauseMenuHeight))
+        {
+            int relMouseY = eventManager.mouseY - menuY;
+            if (relMouseY >= 0 && relMouseY < 64)
+            {
+                pauseMenuSkull.y = menuY;
+                pauseMenuResume.background.material.opacity = 1.0f;
+                pauseMenuSettings.background.material.opacity = 0.5f;
+                pauseMenuQuit.background.material.opacity = 0.5f;
+                pauseMenuHover = 1;
+            }
+            else if (relMouseY >= 64 && relMouseY < 128)
+            {
+                pauseMenuSkull.y = menuY + 64;
+                pauseMenuResume.background.material.opacity = 0.5f;
+                pauseMenuSettings.background.material.opacity = 1.0f;
+                pauseMenuQuit.background.material.opacity = 0.5f;
+                pauseMenuHover = 2;
+            }
+            else if (relMouseY >= 128 && relMouseY < 192)
+            {
+                pauseMenuSkull.y = menuY + 128;
+                pauseMenuResume.background.material.opacity = 0.5f;
+                pauseMenuSettings.background.material.opacity = 0.5f;
+                pauseMenuQuit.background.material.opacity = 1.0f;
+                pauseMenuHover = 3;
+            }
+            
+            pauseMenuSkull.background.visible = true;
+        }
+        else
+        {
+            pauseMenuResume.background.material.opacity = 0.5f;
+            pauseMenuSettings.background.material.opacity = 0.5f;
+            pauseMenuQuit.background.material.opacity = 0.5f;
+            pauseMenuHover = 0;
+            pauseMenuSkull.background.visible = false;
+        }
+        
+        pauseMenuSkull.x = menuX - 64;
+        
+        ui.update(t);
+        
+        foreach(w; ui.widgets)
+        {
+            w.background.update(t);
+            w.entity.update(t);
         }
     }
     

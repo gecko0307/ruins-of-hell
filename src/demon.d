@@ -8,7 +8,6 @@ import dagon.ext.jolt;
 import dagon.ext.audio;
 
 import scene;
-import steering;
 
 struct CharacterHitbox
 {
@@ -39,6 +38,7 @@ class Demon: EventListener
     
     GLTFAsset asset;
     GLTFBlendedPose pose;
+    GLTFAnimation animSwipe;
     GLTFAnimation animTaunt;
     GLTFAnimation animDying;
     GLTFAnimation animHit;
@@ -47,8 +47,6 @@ class Demon: EventListener
     
     Entity entity;
     Material material;
-    
-    Steering steering;
     
     CharacterHitbox[7] hitboxes;
     
@@ -74,6 +72,16 @@ class Demon: EventListener
     
     float currentTurnAngle = 0.0f;
     
+    JoltSphereShape sensorShape;
+    
+    JoltCharacterController character;
+    
+    Vector3f velocity = Vector3f(0.0f, 0.0f, 0.0f);
+    Vector3f acceleration = Vector3f(0.0f, 0.0f, 0.0f);
+    Vector3f lastDirection = Vector3f(0.0f, 0.0f, 1.0f);
+    float maxSpeed = 9.0f;
+    float positionY = 0.0f;
+    
     this(GameScene scene, GLTFAsset asset, Owner owner)
     {
         super(scene.eventManager, owner);
@@ -90,17 +98,20 @@ class Demon: EventListener
         sfxDyingGrowl = scene.audio.loadSound("assets/sounds/growl6.wav");
         
         entity = scene.addEntity();
-        entity.position = Vector3f(-8.0f, -0.1f, 0.0f);
-        entity.scaling = Vector3f(3.0f, 3.0f, 3.0f);
-        steering = New!Steering(eventManager, entity);
+        entity.position = Vector3f(-8.0f, 0.0f, 0.0f);
+        
+        character = New!JoltCharacterController(eventManager, scene.physicsWorld, entity, 3.0f, 0.5f, 100.0f);
         
         scene.useEntity(asset.rootEntity, true);
         asset.rootEntity.setParent(entity);
+        asset.rootEntity.scaling = Vector3f(2.5f, 2.5f, 2.5f);
+        asset.rootEntity.position = Vector3f(0.0f, -0.15f, 0.0f);
         
         material = asset.materials[0];
         
         auto nDemon = asset.node("demon");
         pose = New!GLTFBlendedPose(nDemon.skin, this);
+        animSwipe = asset.animation("swiping");
         animTaunt = asset.animation("taunt");
         animDying = asset.animation("dying");
         animHit = asset.animation("hit");
@@ -146,6 +157,16 @@ class Demon: EventListener
         
         // TODO: leg hitboxes
         
+        sensorShape = New!JoltSphereShape(0.75f, this);
+        
+        auto sphere = New!ShapeSphere(0.75f, this);
+        foreach(ref s; sensors)
+        {
+            s = scene.addEntity();
+            s.drawable = sphere;
+            s.hide();
+        }
+        
         blood = scene.addEntity();
         bloodEmitter = New!Emitter(blood, scene.particleSystem, 10);
         bloodEmitter.material = scene.mParticlesBlood;
@@ -169,6 +190,44 @@ class Demon: EventListener
         
         pose.play();
         scene.audio.play(sfxTauntGrowl);
+    }
+    
+    void seek(Vector3f target, float weight = 1.0f)
+    {
+        Vector3f desiredVeclocity = (target - entity.position).normalized * maxSpeed;
+        Vector3f force = desiredVeclocity - velocity;
+        acceleration += force * weight;
+    }
+    
+    void arrive(Vector3f target, float slowingRadius, float weight = 1.0f)
+    {
+        float speed = maxSpeed * (distance(entity.position, target) / slowingRadius);
+        Vector3f desiredVeclocity = (target - entity.position).normalized * speed;
+        Vector3f force = desiredVeclocity - velocity;
+        acceleration += force * weight;
+    }
+    
+    void arriveToDistance(Vector3f target, float dist, float slowingRadius, float weight = 1.0f)
+    {
+        float d = distance(entity.position, target);
+        if (d > dist || d < dist)
+        {
+            float distDelta = d - dist;
+            Vector3f dir = (target - entity.position).normalized;
+            dir.y = 0.0f;
+            float speed = maxSpeed * (distDelta / slowingRadius);
+            Vector3f desiredVeclocity = dir * speed;
+            Vector3f force = desiredVeclocity - velocity;
+            acceleration += force * weight;
+        }
+    }
+    
+    Vector3f direction()
+    {
+        float len = velocity.length;
+        if (len > 0.001f)
+            lastDirection = velocity / len;
+        return lastDirection;
     }
     
     bool hitTest(Vector3f rayStart, Vector3f rayDirection, float rayDistance, out Vector3f hitPosition, out float damage)
@@ -228,31 +287,50 @@ class Demon: EventListener
         }
     }
     
+    Entity[3] sensors;
+    
+    Vector3f[] sensorPositions = [
+        Vector3f(0.0f, 0.0f, 1.0f),
+        Vector3f(1.0f, 0.0f, 1.0f).normalized,
+        Vector3f(-1.0f, 0.0f, 1.0f).normalized
+        //Vector3f(1.0f, 0.0f, 0.0f),
+        //Vector3f(-1.0f, 0.0f, 0.0f)
+    ];
+    
     void update(Time t)
     {
-        Vector3f rayStart = entity.position + Vector3f(0.0f, 1.0f, 0.0f);
-        Vector3f rayEnd = entity.position - Vector3f(0.0f, 100.0f, 0.0f);
-        Vector3f hitPosition, hitNormal;
-        JoltRigidBody hitBody;
-        if (scene.physicsWorld.raycast(rayStart, rayEnd, hitPosition, hitNormal, hitBody))
-        {
-            steering.positionY += (hitPosition.y - 0.23f - steering.positionY) * 2.0f * t.delta;
-        }
-        
         if (state == DemonState.Walk)
         {
-            const float animSpeed = 3.5f;
-            steering.maxSpeed = animSpeed;
-            steering.arriveToDistance(scene.eCharacter.position, 3.0f, 1.0f, 0.1f);
+            maxSpeed = 3.5f;
             
-            float speed = steering.velocity.length;
+            Vector3f lookDir = (scene.eCharacter.position - entity.position).normalized;
+            
+            Vector3f sensorPos = entity.position + Vector3f(0.0f, 1.75f, 0.0f);
+            bool sensorTest = true;
+            foreach(i, pos; sensorPositions)
+            {
+                sensorPos = entity.position + entity.rotation.rotate(pos * 3.0f);
+                sensorPos.y += 1.75f;
+                sensors[i].position = sensorPos;
+                
+                if (sensorTest)
+                if (!scene.physicsWorld.collideShape(sensorShape, sensorPos, Quaternionf.identity, Vector3f(1.0f, 1.0f, 1.0f)))
+                {
+                    if (i > 0)
+                        lookDir = direction;
+                    Vector3f targetPosition = entity.position + entity.rotation.rotate(pos * 3.0f);
+                    targetPosition.y += 1.75f;
+                    arriveToDistance(targetPosition, 3.0f, 0.5f, 0.1f);
+                    sensorTest = false;
+                }
+            }
+            
+            float speed = velocity.length;
             pose.timeScale = 1.0f;
             
-            float speedFactor = clamp(speed, 0.0, 10.0f) / 10.0f;
-            Vector3f lookDir = lerp((scene.eCharacter.position - entity.position).normalized, steering.direction, speedFactor);
             float desiredAngleY = radtodeg(atan2(lookDir.x, lookDir.z));
             float deltaAngle = wrapAngle(desiredAngleY - currentTurnAngle); // [-180, +180]
-            const float maxTurn = 360.0f * t.delta; // 360 degrees/s
+            const float maxTurn = 60.0f * t.delta; // 60 degrees/s
             deltaAngle = clamp(deltaAngle, -maxTurn, maxTurn);
 
             currentTurnAngle += deltaAngle;
@@ -272,7 +350,7 @@ class Demon: EventListener
                 footstepIndex = 0;
             }
             
-            if (distance(entity.position, scene.eCharacter.position) <= 3.0f)
+            if (distance(entity.position, scene.eCharacter.position) <= 2.0f)
             {
                 if (canGrowl)
                 {
@@ -287,8 +365,8 @@ class Demon: EventListener
         }
         else if (state == DemonState.Damage)
         {
-            steering.velocity = Vector3f(0.0f, 0.0f, 0.0f);
-            steering.acceleration = Vector3f(0.0f, 0.0f, 0.0f);
+            velocity = Vector3f(0.0f, 0.0f, 0.0f);
+            acceleration = Vector3f(0.0f, 0.0f, 0.0f);
             animationSwitchTimer += t.delta;
             if (animationSwitchTimer > 1.0f)
             {
@@ -305,8 +383,8 @@ class Demon: EventListener
         }
         else if (state == DemonState.Taunt)
         {
-            steering.velocity = Vector3f(0.0f, 0.0f, 0.0f);
-            steering.acceleration = Vector3f(0.0f, 0.0f, 0.0f);
+            velocity = Vector3f(0.0f, 0.0f, 0.0f);
+            acceleration = Vector3f(0.0f, 0.0f, 0.0f);
             animationSwitchTimer += t.delta;
             if (animationSwitchTimer > 1.0f)
             {
@@ -323,8 +401,8 @@ class Demon: EventListener
         }
         else if (state == DemonState.Attack)
         {
-            steering.velocity = Vector3f(0.0f, 0.0f, 0.0f);
-            steering.acceleration = Vector3f(0.0f, 0.0f, 0.0f);
+            velocity = Vector3f(0.0f, 0.0f, 0.0f);
+            acceleration = Vector3f(0.0f, 0.0f, 0.0f);
             pose.timeScale = 1.0f;
             
             if (distance(entity.position, scene.eCharacter.position) > 3.0f)
@@ -335,13 +413,29 @@ class Demon: EventListener
                 animationSwitchTimer = 0.0f;
                 pose.timeScale = 1.0f;
             }
+            
+            Vector3f lookDir = (scene.eCharacter.position - entity.position).normalized;
+            
+            float desiredAngleY = radtodeg(atan2(lookDir.x, lookDir.z));
+            float deltaAngle = wrapAngle(desiredAngleY - currentTurnAngle); // [-180, +180]
+            const float maxTurn = 270.0f * t.delta; // 270 degrees/s
+            deltaAngle = clamp(deltaAngle, -maxTurn, maxTurn);
+
+            currentTurnAngle += deltaAngle;
+            entity.setRotation(0.0f, currentTurnAngle, 0.0f);
         }
         else
         {
-            steering.velocity = Vector3f(0.0f, 0.0f, 0.0f);
-            steering.acceleration = Vector3f(0.0f, 0.0f, 0.0f);
+            velocity = Vector3f(0.0f, 0.0f, 0.0f);
+            acceleration = Vector3f(0.0f, 0.0f, 0.0f);
             pose.timeScale = 1.0f;
         }
+        
+        velocity += acceleration;
+        velocity = velocity.normalized * clamp(velocity.length, -maxSpeed, maxSpeed);
+        acceleration = Vector3f(0.0f, 0.0f, 0.0f);
+        
+        character.move(velocity);
         
         if (growlTimer < 5.0f && !canGrowl)
         {
